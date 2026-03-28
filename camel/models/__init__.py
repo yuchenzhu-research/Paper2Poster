@@ -11,68 +11,90 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ========= Copyright 2023-2024 @ CAMEL-AI.org. All Rights Reserved. =========
-from .anthropic_model import AnthropicModel
-from .azure_openai_model import AzureOpenAIModel
+import importlib
+
 from .base_model import BaseModelBackend
-from .cohere_model import CohereModel
-from .deepseek_model import DeepSeekModel
-from .fish_audio_model import FishAudioModel
-from .gemini_model import GeminiModel, DeepInfraGeminiModel
-from .groq_model import GroqModel
-from .internlm_model import InternLMModel
-from .litellm_model import LiteLLMModel
-from .mistral_model import MistralModel
 from .model_factory import ModelFactory
 from .model_manager import ModelManager, ModelProcessingError
-from .nemotron_model import NemotronModel
-from .nvidia_model import NvidiaModel
-from .ollama_model import OllamaModel
-from .openai_audio_models import OpenAIAudioModels
-from .openai_compatible_model import OpenAICompatibleModel
-from .openai_model import OpenAIModel
-from .qwen_model import QwenModel, DeepInfraPhi4Model
-from .reka_model import RekaModel
-from .samba_model import SambaModel
-from .sglang_model import SGLangModel
-from .stub_model import StubModel
-from .togetherai_model import TogetherAIModel
-from .vllm_model import VLLMModel
-from .yi_model import YiModel
-from .zhipuai_model import ZhipuAIModel
-from .openrouter_model import OpenRouterModel
+
+_LAZY_EXPORTS = {
+    "AnthropicModel": (".anthropic_model", "AnthropicModel"),
+    "AzureOpenAIModel": (".azure_openai_model", "AzureOpenAIModel"),
+    "CohereModel": (".cohere_model", "CohereModel"),
+    "DeepSeekModel": (".deepseek_model", "DeepSeekModel"),
+    "FishAudioModel": (".fish_audio_model", "FishAudioModel"),
+    "GeminiModel": (".gemini_model", "GeminiModel"),
+    "DeepInfraGeminiModel": (".gemini_model", "DeepInfraGeminiModel"),
+    "GroqModel": (".groq_model", "GroqModel"),
+    "InternLMModel": (".internlm_model", "InternLMModel"),
+    "LiteLLMModel": (".litellm_model", "LiteLLMModel"),
+    "MistralModel": (".mistral_model", "MistralModel"),
+    "NemotronModel": (".nemotron_model", "NemotronModel"),
+    "NvidiaModel": (".nvidia_model", "NvidiaModel"),
+    "OllamaModel": (".ollama_model", "OllamaModel"),
+    "OpenAIAudioModels": (".openai_audio_models", "OpenAIAudioModels"),
+    "OpenAICompatibleModel": (".openai_compatible_model", "OpenAICompatibleModel"),
+    "OpenAICompatibleModelV2": (
+        ".openai_compatible_model_v2",
+        "OpenAICompatibleModelV2",
+    ),
+    "OpenAIModel": (".openai_model", "OpenAIModel"),
+    "OpenRouterModel": (".openrouter_model", "OpenRouterModel"),
+    "QwenModel": (".qwen_model", "QwenModel"),
+    "DeepInfraPhi4Model": (".qwen_model", "DeepInfraPhi4Model"),
+    "RekaModel": (".reka_model", "RekaModel"),
+    "SambaModel": (".samba_model", "SambaModel"),
+    "SGLangModel": (".sglang_model", "SGLangModel"),
+    "StubModel": (".stub_model", "StubModel"),
+    "TogetherAIModel": (".togetherai_model", "TogetherAIModel"),
+    "VLLMModel": (".vllm_model", "VLLMModel"),
+    "YiModel": (".yi_model", "YiModel"),
+    "ZhipuAIModel": (".zhipuai_model", "ZhipuAIModel"),
+}
 
 __all__ = [
-    'BaseModelBackend',
-    'OpenAIModel',
-    'AzureOpenAIModel',
-    'AnthropicModel',
-    'MistralModel',
-    'GroqModel',
-    'StubModel',
-    'ZhipuAIModel',
-    'CohereModel',
-    'ModelFactory',
-    'ModelManager',
-    'LiteLLMModel',
-    'OpenAIAudioModels',
-    'NemotronModel',
-    'NvidiaModel',
-    'OllamaModel',
-    'VLLMModel',
-    'SGLangModel',
-    'GeminiModel',
-    'OpenAICompatibleModel',
-    'OpenAICompatibleModelV2',
-    'RekaModel',
-    'SambaModel',
-    'TogetherAIModel',
-    'YiModel',
-    'QwenModel',
-    'ModelProcessingError',
-    'DeepSeekModel',
-    'FishAudioModel',
-    'InternLMModel',
-    'OpenRouterModel',
-    'DeepInfraPhi4Model',
-    'DeepInfraGeminiModel',
+    "BaseModelBackend",
+    "OpenAIModel",
+    "AzureOpenAIModel",
+    "AnthropicModel",
+    "MistralModel",
+    "GroqModel",
+    "StubModel",
+    "ZhipuAIModel",
+    "CohereModel",
+    "ModelFactory",
+    "ModelManager",
+    "LiteLLMModel",
+    "OpenAIAudioModels",
+    "NemotronModel",
+    "NvidiaModel",
+    "OllamaModel",
+    "VLLMModel",
+    "SGLangModel",
+    "GeminiModel",
+    "OpenAICompatibleModel",
+    "OpenAICompatibleModelV2",
+    "RekaModel",
+    "SambaModel",
+    "TogetherAIModel",
+    "YiModel",
+    "QwenModel",
+    "ModelProcessingError",
+    "DeepSeekModel",
+    "FishAudioModel",
+    "InternLMModel",
+    "OpenRouterModel",
+    "DeepInfraPhi4Model",
+    "DeepInfraGeminiModel",
 ]
+
+
+def __getattr__(name):
+    if name not in _LAZY_EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    module_name, attr_name = _LAZY_EXPORTS[name]
+    module = importlib.import_module(module_name, __name__)
+    value = getattr(module, attr_name)
+    globals()[name] = value
+    return value

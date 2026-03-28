@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import traceback
 from time import sleep, time
@@ -136,17 +137,45 @@ tenacity = retry(
 )
 
 
+def resolve_soffice_binary() -> str:
+    env_path = os.environ.get("SOFFICE_BIN")
+    if env_path:
+        resolved_env_path = os.path.expanduser(env_path)
+        if os.path.isfile(resolved_env_path) and os.access(resolved_env_path, os.X_OK):
+            return resolved_env_path
+        raise RuntimeError(
+            "SOFFICE_BIN is set but does not point to an executable file: "
+            f"{resolved_env_path}"
+        )
+
+    path_binary = shutil.which("soffice")
+    if path_binary:
+        return path_binary
+
+    if sys.platform == "darwin":
+        macos_app_binary = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+        if os.path.isfile(macos_app_binary) and os.access(macos_app_binary, os.X_OK):
+            return macos_app_binary
+
+    raise RuntimeError(
+        "LibreOffice executable not found. Set SOFFICE_BIN, add `soffice` to "
+        "PATH, or install LibreOffice. On macOS, the default app bundle path "
+        "is /Applications/LibreOffice.app/Contents/MacOS/soffice."
+    )
+
+
 @tenacity
 def ppt_to_images(file: str, output_dir: str, warning: bool = False, dpi=72, output_type='png'):
     assert pexists(file), f"File {file} does not exist"
     if pexists(output_dir) and warning:
         print(f"ppt2images: {output_dir} already exists")
     os.makedirs(output_dir, exist_ok=True)
+    soffice_bin = resolve_soffice_binary()
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create unique user installation directory for LibreOffice to avoid concurrency issues
         with tempfile.TemporaryDirectory() as user_install_dir:
             command_list = [
-                "soffice",
+                soffice_bin,
                 "--headless",
                 "--norestore",
                 "--nolockcheck",
@@ -184,13 +213,14 @@ def wmf_to_images(blob: bytes, filepath: str):
         raise ValueError("filepath must end with .jpg")
     dirname = os.path.dirname(filepath)
     basename = os.path.basename(filepath).removesuffix(".jpg")
+    soffice_bin = resolve_soffice_binary()
     with tempfile.TemporaryDirectory() as temp_dir:
         with open(pjoin(temp_dir, f"{basename}.wmf"), "wb") as f:
             f.write(blob)
         # Create unique user installation directory for LibreOffice to avoid concurrency issues
         with tempfile.TemporaryDirectory() as user_install_dir:
             command_list = [
-                "soffice",
+                soffice_bin,
                 "--headless",
                 "--norestore",
                 "--nolockcheck",
@@ -201,7 +231,16 @@ def wmf_to_images(blob: bytes, filepath: str):
                 "--outdir",
                 dirname,
             ]
-            subprocess.run(command_list, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            env = os.environ.copy()
+            env["LC_ALL"] = "en_US.UTF-8"
+            env["LANG"] = "en_US.UTF-8"
+            subprocess.run(
+                command_list,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=env,
+            )
 
     assert pexists(filepath), f"File {filepath} does not exist"
 

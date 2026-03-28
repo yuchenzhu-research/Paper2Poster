@@ -11,34 +11,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ========= Copyright 2023-2024 @ CAMEL-AI.org. All Rights Reserved. =========
+import importlib
+
 from .base import BaseAgent
-from .chat_agent import ChatAgent
-from .critic_agent import CriticAgent
-from .embodied_agent import EmbodiedAgent
-from .knowledge_graph_agent import KnowledgeGraphAgent
-from .role_assignment_agent import RoleAssignmentAgent
-from .search_agent import SearchAgent
-from .task_agent import (
-    TaskCreationAgent,
-    TaskPlannerAgent,
-    TaskPrioritizationAgent,
-    TaskSpecifyAgent,
-)
-from .tool_agents.base import BaseToolAgent
-from .tool_agents.hugging_face_tool_agent import HuggingFaceToolAgent
+
+_LAZY_EXPORTS = {
+    "ChatAgent": (".chat_agent", "ChatAgent"),
+    "CriticAgent": (".critic_agent", "CriticAgent"),
+    "EmbodiedAgent": (".embodied_agent", "EmbodiedAgent"),
+    "KnowledgeGraphAgent": (".knowledge_graph_agent", "KnowledgeGraphAgent"),
+    "RoleAssignmentAgent": (".role_assignment_agent", "RoleAssignmentAgent"),
+    "SearchAgent": (".search_agent", "SearchAgent"),
+    "TaskCreationAgent": (".task_agent", "TaskCreationAgent"),
+    "TaskPlannerAgent": (".task_agent", "TaskPlannerAgent"),
+    "TaskPrioritizationAgent": (".task_agent", "TaskPrioritizationAgent"),
+    "TaskSpecifyAgent": (".task_agent", "TaskSpecifyAgent"),
+    "BaseToolAgent": (".tool_agents.base", "BaseToolAgent"),
+    "HuggingFaceToolAgent": (
+        ".tool_agents.hugging_face_tool_agent",
+        "HuggingFaceToolAgent",
+    ),
+}
 
 __all__ = [
-    'BaseAgent',
-    'ChatAgent',
-    'TaskSpecifyAgent',
-    'TaskPlannerAgent',
-    'TaskCreationAgent',
-    'TaskPrioritizationAgent',
-    'CriticAgent',
-    'BaseToolAgent',
-    'HuggingFaceToolAgent',
-    'EmbodiedAgent',
-    'RoleAssignmentAgent',
-    'SearchAgent',
-    'KnowledgeGraphAgent',
+    "BaseAgent",
+    "ChatAgent",
+    "TaskSpecifyAgent",
+    "TaskPlannerAgent",
+    "TaskCreationAgent",
+    "TaskPrioritizationAgent",
+    "CriticAgent",
+    "BaseToolAgent",
+    "HuggingFaceToolAgent",
+    "EmbodiedAgent",
+    "RoleAssignmentAgent",
+    "SearchAgent",
+    "KnowledgeGraphAgent",
 ]
+
+
+def __getattr__(name):
+    if name not in _LAZY_EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    module_name, attr_name = _LAZY_EXPORTS[name]
+    module = importlib.import_module(module_name, __name__)
+    value = getattr(module, attr_name)
+    globals()[name] = value
+    return value

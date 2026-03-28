@@ -16,9 +16,7 @@ import os
 import copy
 import io
 from utils.src.utils import ppt_to_images
-from playwright.sync_api import sync_playwright
 from pathlib import Path
-from playwright.async_api import async_playwright
 import asyncio
 from utils.pptx_utils import *
 from utils.critic_utils import *
@@ -145,6 +143,12 @@ def get_agent_config(model_type):
     elif model_type == 'gpt-5':
         agent_config = {
             "model_type": ModelType.GPT_5,
+            "model_config": ChatGPTConfig().as_dict(),
+            "model_platform": ModelPlatformType.OPENAI,
+        }
+    elif model_type in ('gpt-5-mini', 'gpt-5.4-mini'):
+        agent_config = {
+            "model_type": model_type,
             "model_config": ChatGPTConfig().as_dict(),
             "model_platform": ModelPlatformType.OPENAI,
         }
@@ -937,6 +941,8 @@ def check_and_fix_subsections(section, subsections):
     return ()
 
 async def rendered_dims(html: Path) -> tuple[int, int]:
+    from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser = await p.chromium.launch()
         page    = await browser.new_page()        # no fixed viewport yet
@@ -957,6 +963,8 @@ async def rendered_dims(html: Path) -> tuple[int, int]:
 
     
 def html_to_png(html_abs_path, poster_width_default, poster_height_default, output_path):
+    from playwright.sync_api import sync_playwright
+
     html_file = html_abs_path
 
     try:
