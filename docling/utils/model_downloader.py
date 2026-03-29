@@ -4,12 +4,6 @@ from typing import Optional
 
 from docling.datamodel.pipeline_options import smolvlm_picture_description
 from docling.datamodel.settings import settings
-from docling.models.code_formula_model import CodeFormulaModel
-from docling.models.document_picture_classifier import DocumentPictureClassifier
-from docling.models.easyocr_model import EasyOcrModel
-from docling.models.layout_model import LayoutModel
-from docling.models.picture_description_vlm_model import PictureDescriptionVlmModel
-from docling.models.table_structure_model import TableStructureModel
 
 _log = logging.getLogger(__name__)
 
@@ -33,6 +27,8 @@ def download_models(
     output_dir.mkdir(exist_ok=True, parents=True)
 
     if with_layout:
+        from docling.models.layout_model import LayoutModel
+
         _log.info(f"Downloading layout model...")
         LayoutModel.download_models(
             local_dir=output_dir / LayoutModel._model_repo_folder,
@@ -41,6 +37,8 @@ def download_models(
         )
 
     if with_tableformer:
+        from docling.models.table_structure_model import TableStructureModel
+
         _log.info(f"Downloading tableformer model...")
         TableStructureModel.download_models(
             local_dir=output_dir / TableStructureModel._model_repo_folder,
@@ -49,6 +47,10 @@ def download_models(
         )
 
     if with_picture_classifier:
+        from docling.models.document_picture_classifier import (
+            DocumentPictureClassifier,
+        )
+
         _log.info(f"Downloading picture classifier model...")
         DocumentPictureClassifier.download_models(
             local_dir=output_dir / DocumentPictureClassifier._model_repo_folder,
@@ -57,6 +59,8 @@ def download_models(
         )
 
     if with_code_formula:
+        from docling.models.code_formula_model import CodeFormulaModel
+
         _log.info(f"Downloading code formula model...")
         CodeFormulaModel.download_models(
             local_dir=output_dir / CodeFormulaModel._model_repo_folder,
@@ -65,6 +69,10 @@ def download_models(
         )
 
     if with_smolvlm:
+        from docling.models.picture_description_vlm_model import (
+            PictureDescriptionVlmModel,
+        )
+
         _log.info(f"Downloading SmolVlm model...")
         PictureDescriptionVlmModel.download_models(
             repo_id=smolvlm_picture_description.repo_id,
@@ -74,6 +82,8 @@ def download_models(
         )
 
     if with_easyocr:
+        from docling.models.easyocr_model import EasyOcrModel
+
         _log.info(f"Downloading easyocr models...")
         EasyOcrModel.download_models(
             local_dir=output_dir / EasyOcrModel._model_repo_folder,

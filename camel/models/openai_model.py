@@ -24,6 +24,7 @@ from camel.types import (
     ChatCompletion,
     ChatCompletionChunk,
     ModelType,
+    NOT_GIVEN,
 )
 from camel.utils import (
     BaseTokenCounter,
@@ -105,10 +106,13 @@ class OpenAIModel(BaseModelBackend):
                 `ChatCompletion` in the non-stream mode, or
                 `Stream[ChatCompletionChunk]` in the stream mode.
         """
+        request_config = dict(self.model_config_dict)
+        model_name = str(self.model_type)
+
         # o1-preview and o1-mini have Beta limitations
         # reference: https://platform.openai.com/docs/guides/reasoning
-        # GPT-5 models also have similar restrictions
-        if self.model_type in [
+        # GPT-5 models and compatible aliases have similar restrictions
+        reasoning_like_model = self.model_type in [
             ModelType.O1,
             ModelType.O1_MINI,
             ModelType.O1_PREVIEW,
@@ -117,7 +121,9 @@ class OpenAIModel(BaseModelBackend):
             ModelType.GPT_5,
             ModelType.GPT_5_MINI,
             ModelType.GPT_5_NANO,
-        ]:
+        ] or model_name.startswith(("o1", "o3", "gpt-5"))
+
+        if reasoning_like_model:
             # warnings.warn(
             #     "Warning: You are using an O1 model (O1_MINI or O1_PREVIEW), "
             #     "which has certain limitations, reference: "
@@ -137,18 +143,21 @@ class OpenAIModel(BaseModelBackend):
                 "logit_bias",
             ]
             for key in unsupported_keys:
-                if key in self.model_config_dict:
-                    del self.model_config_dict[key]
+                request_config.pop(key, None)
 
-        if self.model_config_dict.get("response_format"):
+            max_tokens = request_config.pop("max_tokens", NOT_GIVEN)
+            if max_tokens is not NOT_GIVEN and max_tokens is not None:
+                request_config["max_completion_tokens"] = max_tokens
+
+        if request_config.get("response_format"):
             # stream is not supported in beta.chat.completions.parse
-            if "stream" in self.model_config_dict:
-                del self.model_config_dict["stream"]
+            if "stream" in request_config:
+                del request_config["stream"]
 
             response = self._client.beta.chat.completions.parse(
                 messages=messages,
                 model=self.model_type,
-                **self.model_config_dict,
+                **request_config,
             )
 
             return self._to_chat_completion(response)
@@ -156,7 +165,7 @@ class OpenAIModel(BaseModelBackend):
         response = self._client.chat.completions.create(
             messages=messages,
             model=self.model_type,
-            **self.model_config_dict,
+            **request_config,
         )
         return response
 

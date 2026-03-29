@@ -1,7 +1,7 @@
 import tempfile
 import shutil
 from dotenv import load_dotenv
-from utils.src.utils import get_json_from_response
+from utils.src.utils import get_json_from_response, resolve_soffice_binary
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 
@@ -22,6 +22,14 @@ import argparse
 
 load_dotenv()
 MAX_ATTEMPT = 10
+
+
+def _preview_render_available() -> bool:
+    try:
+        resolve_soffice_binary()
+    except RuntimeError:
+        return False
+    return True
 
 def gen_content_process_section(
     section_name, 
@@ -253,6 +261,13 @@ def gen_bullet_point_content(args, actor_config, critic_config, agent_modify=Tru
     for k in textboxes_by_panel:
         textboxes_by_panel[k] = sorted(textboxes_by_panel[k], key=lambda x: x.get('textbox_id', 0))
 
+    preview_render_available = _preview_render_available()
+    if not preview_render_available:
+        print(
+            "Warning: LibreOffice executable not found; skipping visual "
+            "overflow/blank detection previews."
+        )
+
     # ----------------------- Worker (defined INSIDE main fn) -----------------------
     def _process_section(i):
         """
@@ -357,10 +372,18 @@ def gen_bullet_point_content(args, actor_config, critic_config, agent_modify=Tru
             bullet_content = bullet_contents[j]
             curr_round = 0
             while True:
-                if args.ablation_no_commenter:
+                if args.ablation_no_commenter or not preview_render_available:
                     break
                 curr_round += 1
-                img = render_textbox(text_arrangement, result_json[bullet_content], local_tmp_dir)
+                try:
+                    img = render_textbox(
+                        text_arrangement,
+                        result_json[bullet_content],
+                        local_tmp_dir,
+                    )
+                except RuntimeError as exc:
+                    print(f"Section {i}: Preview rendering skipped: {exc}")
+                    break
                 if args.model_name_v.startswith('vllm_qwen') or args.ablation_no_example:
                     critic_msg = BaseMessage.make_user_message(
                         role_name="User",
