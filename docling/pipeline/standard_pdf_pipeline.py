@@ -2,7 +2,7 @@ import logging
 import sys
 import warnings
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
 from docling_core.types.doc import DocItem, ImageRef, PictureItem, TableItem
 
@@ -27,22 +27,14 @@ from docling.models.document_picture_classifier import (
     DocumentPictureClassifier,
     DocumentPictureClassifierOptions,
 )
-from docling.models.ds_glm_model import GlmModel, GlmOptions
-from docling.models.easyocr_model import EasyOcrModel
+from docling.models.base_model import BasePageModel
 from docling.models.layout_model import LayoutModel
-from docling.models.ocr_mac_model import OcrMacModel
 from docling.models.page_assemble_model import PageAssembleModel, PageAssembleOptions
 from docling.models.page_preprocessing_model import (
     PagePreprocessingModel,
     PagePreprocessingOptions,
 )
-from docling.models.picture_description_api_model import PictureDescriptionApiModel
 from docling.models.picture_description_base_model import PictureDescriptionBaseModel
-from docling.models.picture_description_vlm_model import PictureDescriptionVlmModel
-from docling.models.rapid_ocr_model import RapidOcrModel
-from docling.models.table_structure_model import TableStructureModel
-from docling.models.tesseract_ocr_cli_model import TesseractOcrCliModel
-from docling.models.tesseract_ocr_model import TesseractOcrModel
 from docling.pipeline.base_pipeline import PaginatedPipeline
 from docling.utils.model_downloader import download_models
 from docling.utils.profiling import ProfilingScope, TimeRecorder
@@ -50,9 +42,30 @@ from docling.utils.profiling import ProfilingScope, TimeRecorder
 _log = logging.getLogger(__name__)
 
 
+class _NoOpOcrModel(BaseOcrModel):
+    def __init__(self, options):
+        super().__init__(enabled=False, options=options)
+
+    def __call__(self, conv_res, page_batch: Iterable[Page]) -> Iterable[Page]:
+        yield from page_batch
+
+
+class _NoOpPictureDescriptionModel(PictureDescriptionBaseModel):
+    def __init__(self, options):
+        super().__init__(enabled=False, options=options)
+
+    def _annotate_images(self, images):
+        return []
+
+
+class _NoOpPageModel(BasePageModel):
+    def __call__(self, conv_res, page_batch: Iterable[Page]) -> Iterable[Page]:
+        yield from page_batch
+
+
 class StandardPdfPipeline(PaginatedPipeline):
     _layout_model_path = LayoutModel._model_path
-    _table_model_path = TableStructureModel._model_path
+    _table_model_path = "model_artifacts/tableformer"
 
     def __init__(self, pipeline_options: PdfPipelineOptions):
         super().__init__(pipeline_options)
@@ -68,7 +81,7 @@ class StandardPdfPipeline(PaginatedPipeline):
             or self.pipeline_options.generate_table_images
         )
 
-        self.glm_model = GlmModel(options=GlmOptions())
+        self.glm_model = self._build_glm_model()
 
         if (ocr_model := self.get_ocr_model(artifacts_path=artifacts_path)) is None:
             raise RuntimeError(
@@ -90,12 +103,7 @@ class StandardPdfPipeline(PaginatedPipeline):
                 accelerator_options=pipeline_options.accelerator_options,
             ),
             # Table structure model
-            TableStructureModel(
-                enabled=pipeline_options.do_table_structure,
-                artifacts_path=artifacts_path,
-                options=pipeline_options.table_structure_options,
-                accelerator_options=pipeline_options.accelerator_options,
-            ),
+            self._build_table_structure_model(artifacts_path=artifacts_path),
             # Page assemble
             PageAssembleModel(options=PageAssembleOptions()),
         ]
@@ -155,10 +163,27 @@ class StandardPdfPipeline(PaginatedPipeline):
         output_dir = download_models(output_dir=local_dir, force=force, progress=False)
         return output_dir
 
+    def _build_glm_model(self):
+        try:
+            from docling.models.ds_glm_model import GlmModel, GlmOptions
+        except ImportError as exc:
+            raise RuntimeError(
+                "PDF document assembly requires the optional `deepsearch-glm` "
+                "dependency. Install `deepsearch-glm==1.0.0` to enable the "
+                "PosterAgent PDF parsing path."
+            ) from exc
+
+        return GlmModel(options=GlmOptions())
+
     def get_ocr_model(
         self, artifacts_path: Optional[Path] = None
     ) -> Optional[BaseOcrModel]:
+        if not self.pipeline_options.do_ocr:
+            return _NoOpOcrModel(options=self.pipeline_options.ocr_options)
+
         if isinstance(self.pipeline_options.ocr_options, EasyOcrOptions):
+            from docling.models.easyocr_model import EasyOcrModel
+
             return EasyOcrModel(
                 enabled=self.pipeline_options.do_ocr,
                 artifacts_path=artifacts_path,
@@ -166,16 +191,22 @@ class StandardPdfPipeline(PaginatedPipeline):
                 accelerator_options=self.pipeline_options.accelerator_options,
             )
         elif isinstance(self.pipeline_options.ocr_options, TesseractCliOcrOptions):
+            from docling.models.tesseract_ocr_cli_model import TesseractOcrCliModel
+
             return TesseractOcrCliModel(
                 enabled=self.pipeline_options.do_ocr,
                 options=self.pipeline_options.ocr_options,
             )
         elif isinstance(self.pipeline_options.ocr_options, TesseractOcrOptions):
+            from docling.models.tesseract_ocr_model import TesseractOcrModel
+
             return TesseractOcrModel(
                 enabled=self.pipeline_options.do_ocr,
                 options=self.pipeline_options.ocr_options,
             )
         elif isinstance(self.pipeline_options.ocr_options, RapidOcrOptions):
+            from docling.models.rapid_ocr_model import RapidOcrModel
+
             return RapidOcrModel(
                 enabled=self.pipeline_options.do_ocr,
                 options=self.pipeline_options.ocr_options,
@@ -186,19 +217,45 @@ class StandardPdfPipeline(PaginatedPipeline):
                 raise RuntimeError(
                     f"The specified OCR type is only supported on Mac: {self.pipeline_options.ocr_options.kind}."
                 )
+            from docling.models.ocr_mac_model import OcrMacModel
+
             return OcrMacModel(
                 enabled=self.pipeline_options.do_ocr,
                 options=self.pipeline_options.ocr_options,
             )
         return None
 
+    def _build_table_structure_model(
+        self, artifacts_path: Optional[Path] = None
+    ) -> BasePageModel:
+        if not self.pipeline_options.do_table_structure:
+            return _NoOpPageModel()
+
+        from docling.models.table_structure_model import TableStructureModel
+
+        return TableStructureModel(
+            enabled=self.pipeline_options.do_table_structure,
+            artifacts_path=artifacts_path,
+            options=self.pipeline_options.table_structure_options,
+            accelerator_options=self.pipeline_options.accelerator_options,
+        )
+
     def get_picture_description_model(
         self, artifacts_path: Optional[Path] = None
     ) -> Optional[PictureDescriptionBaseModel]:
+        if not self.pipeline_options.do_picture_description:
+            return _NoOpPictureDescriptionModel(
+                options=self.pipeline_options.picture_description_options
+            )
+
         if isinstance(
             self.pipeline_options.picture_description_options,
             PictureDescriptionApiOptions,
         ):
+            from docling.models.picture_description_api_model import (
+                PictureDescriptionApiModel,
+            )
+
             return PictureDescriptionApiModel(
                 enabled=self.pipeline_options.do_picture_description,
                 options=self.pipeline_options.picture_description_options,
@@ -207,6 +264,10 @@ class StandardPdfPipeline(PaginatedPipeline):
             self.pipeline_options.picture_description_options,
             PictureDescriptionVlmOptions,
         ):
+            from docling.models.picture_description_vlm_model import (
+                PictureDescriptionVlmModel,
+            )
+
             return PictureDescriptionVlmModel(
                 enabled=self.pipeline_options.do_picture_description,
                 artifacts_path=artifacts_path,

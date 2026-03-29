@@ -9,16 +9,15 @@ from typing import Dict, Iterable, Iterator, List, Optional, Tuple, Type, Union
 from pydantic import BaseModel, ConfigDict, model_validator, validate_call
 
 from docling.backend.abstract_backend import AbstractDocumentBackend
-from docling.backend.asciidoc_backend import AsciiDocBackend
-from docling.backend.docling_parse_v2_backend import DoclingParseV2DocumentBackend
-from docling.backend.html_backend import HTMLDocumentBackend
+try:
+    from docling.backend.docling_parse_v2_backend import DoclingParseV2DocumentBackend
+
+    DefaultPdfBackend = DoclingParseV2DocumentBackend
+except (ImportError, AttributeError):
+    from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
+
+    DefaultPdfBackend = DoclingParseDocumentBackend
 from docling.backend.json.docling_json_backend import DoclingJSONBackend
-from docling.backend.md_backend import MarkdownDocumentBackend
-from docling.backend.msexcel_backend import MsExcelDocumentBackend
-from docling.backend.mspowerpoint_backend import MsPowerpointDocumentBackend
-from docling.backend.msword_backend import MsWordDocumentBackend
-from docling.backend.xml.pubmed_backend import PubMedDocumentBackend
-from docling.backend.xml.uspto_backend import PatentUsptoDocumentBackend
 from docling.datamodel.base_models import (
     ConversionStatus,
     DoclingComponentType,
@@ -45,6 +44,62 @@ from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
 from docling.utils.utils import chunkify
 
 _log = logging.getLogger(__name__)
+
+
+def _make_missing_backend(name: str, import_error: Exception):
+    class MissingBackend(AbstractDocumentBackend):
+        def __init__(self, *args, **kwargs):
+            raise ImportError(
+                f"{name} is unavailable because an optional dependency failed to import."
+            ) from import_error
+
+    MissingBackend.__name__ = name
+    return MissingBackend
+
+
+try:
+    from docling.backend.html_backend import HTMLDocumentBackend
+except ImportError as exc:
+    HTMLDocumentBackend = _make_missing_backend("HTMLDocumentBackend", exc)
+
+try:
+    from docling.backend.asciidoc_backend import AsciiDocBackend
+except ImportError as exc:
+    AsciiDocBackend = _make_missing_backend("AsciiDocBackend", exc)
+
+try:
+    from docling.backend.md_backend import MarkdownDocumentBackend
+except ImportError as exc:
+    MarkdownDocumentBackend = _make_missing_backend("MarkdownDocumentBackend", exc)
+
+try:
+    from docling.backend.msexcel_backend import MsExcelDocumentBackend
+except ImportError as exc:
+    MsExcelDocumentBackend = _make_missing_backend("MsExcelDocumentBackend", exc)
+
+try:
+    from docling.backend.mspowerpoint_backend import MsPowerpointDocumentBackend
+except ImportError as exc:
+    MsPowerpointDocumentBackend = _make_missing_backend(
+        "MsPowerpointDocumentBackend", exc
+    )
+
+try:
+    from docling.backend.msword_backend import MsWordDocumentBackend
+except ImportError as exc:
+    MsWordDocumentBackend = _make_missing_backend("MsWordDocumentBackend", exc)
+
+try:
+    from docling.backend.xml.pubmed_backend import PubMedDocumentBackend
+except ImportError as exc:
+    PubMedDocumentBackend = _make_missing_backend("PubMedDocumentBackend", exc)
+
+try:
+    from docling.backend.xml.uspto_backend import PatentUsptoDocumentBackend
+except ImportError as exc:
+    PatentUsptoDocumentBackend = _make_missing_backend(
+        "PatentUsptoDocumentBackend", exc
+    )
 
 
 class FormatOption(BaseModel):
@@ -103,12 +158,12 @@ class XMLPubMedFormatOption(FormatOption):
 
 class ImageFormatOption(FormatOption):
     pipeline_cls: Type = StandardPdfPipeline
-    backend: Type[AbstractDocumentBackend] = DoclingParseV2DocumentBackend
+    backend: Type[AbstractDocumentBackend] = DefaultPdfBackend
 
 
 class PdfFormatOption(FormatOption):
     pipeline_cls: Type = StandardPdfPipeline
-    backend: Type[AbstractDocumentBackend] = DoclingParseV2DocumentBackend
+    backend: Type[AbstractDocumentBackend] = DefaultPdfBackend
 
 
 def _get_default_option(format: InputFormat) -> FormatOption:
@@ -138,10 +193,10 @@ def _get_default_option(format: InputFormat) -> FormatOption:
             pipeline_cls=SimplePipeline, backend=PubMedDocumentBackend
         ),
         InputFormat.IMAGE: FormatOption(
-            pipeline_cls=StandardPdfPipeline, backend=DoclingParseV2DocumentBackend
+            pipeline_cls=StandardPdfPipeline, backend=DefaultPdfBackend
         ),
         InputFormat.PDF: FormatOption(
-            pipeline_cls=StandardPdfPipeline, backend=DoclingParseV2DocumentBackend
+            pipeline_cls=StandardPdfPipeline, backend=DefaultPdfBackend
         ),
         InputFormat.JSON_DOCLING: FormatOption(
             pipeline_cls=SimplePipeline, backend=DoclingJSONBackend

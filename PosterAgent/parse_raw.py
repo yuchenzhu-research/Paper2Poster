@@ -24,6 +24,8 @@ IMAGE_RESOLUTION_SCALE = 5.0
 
 pipeline_options = PdfPipelineOptions()
 pipeline_options.images_scale = IMAGE_RESOLUTION_SCALE
+pipeline_options.do_ocr = False
+pipeline_options.do_table_structure = False
 pipeline_options.generate_page_images = True
 pipeline_options.generate_picture_images = True
 

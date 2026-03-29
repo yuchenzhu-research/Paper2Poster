@@ -11,45 +11,74 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ========= Copyright 2023-2024 @ CAMEL-AI.org. All Rights Reserved. =========
-from .ai_society import AISocietyPromptTemplateDict
+import importlib
+
 from .base import CodePrompt, TextPrompt, TextPromptDict
-from .code import CodePromptTemplateDict
-from .evaluation import EvaluationPromptTemplateDict
-from .generate_text_embedding_data import (
-    GenerateTextEmbeddingDataPromptTemplateDict,
-)
-from .image_craft import ImageCraftPromptTemplateDict
-from .misalignment import MisalignmentPromptTemplateDict
-from .multi_condition_image_craft import (
-    MultiConditionImageCraftPromptTemplateDict,
-)
-from .object_recognition import ObjectRecognitionPromptTemplateDict
-from .persona_hub import PersonaHubPrompt
-from .prompt_templates import PromptTemplateGenerator
-from .role_description_prompt_template import RoleDescriptionPromptTemplateDict
-from .solution_extraction import SolutionExtractionPromptTemplateDict
-from .task_prompt_template import TaskPromptTemplateDict
-from .translation import TranslationPromptTemplateDict
-from .video_description_prompt import VideoDescriptionPromptTemplateDict
+
+_LAZY_EXPORTS = {
+    "AISocietyPromptTemplateDict": (".ai_society", "AISocietyPromptTemplateDict"),
+    "CodePromptTemplateDict": (".code", "CodePromptTemplateDict"),
+    "EvaluationPromptTemplateDict": (".evaluation", "EvaluationPromptTemplateDict"),
+    "GenerateTextEmbeddingDataPromptTemplateDict": (
+        ".generate_text_embedding_data",
+        "GenerateTextEmbeddingDataPromptTemplateDict",
+    ),
+    "ImageCraftPromptTemplateDict": (".image_craft", "ImageCraftPromptTemplateDict"),
+    "MisalignmentPromptTemplateDict": (".misalignment", "MisalignmentPromptTemplateDict"),
+    "MultiConditionImageCraftPromptTemplateDict": (
+        ".multi_condition_image_craft",
+        "MultiConditionImageCraftPromptTemplateDict",
+    ),
+    "ObjectRecognitionPromptTemplateDict": (
+        ".object_recognition",
+        "ObjectRecognitionPromptTemplateDict",
+    ),
+    "PersonaHubPrompt": (".persona_hub", "PersonaHubPrompt"),
+    "PromptTemplateGenerator": (".prompt_templates", "PromptTemplateGenerator"),
+    "RoleDescriptionPromptTemplateDict": (
+        ".role_description_prompt_template",
+        "RoleDescriptionPromptTemplateDict",
+    ),
+    "SolutionExtractionPromptTemplateDict": (
+        ".solution_extraction",
+        "SolutionExtractionPromptTemplateDict",
+    ),
+    "TaskPromptTemplateDict": (".task_prompt_template", "TaskPromptTemplateDict"),
+    "TranslationPromptTemplateDict": (".translation", "TranslationPromptTemplateDict"),
+    "VideoDescriptionPromptTemplateDict": (
+        ".video_description_prompt",
+        "VideoDescriptionPromptTemplateDict",
+    ),
+}
 
 __all__ = [
-    'TextPrompt',
-    'CodePrompt',
-    'TextPromptDict',
-    'AISocietyPromptTemplateDict',
-    'CodePromptTemplateDict',
-    'MisalignmentPromptTemplateDict',
-    'TranslationPromptTemplateDict',
-    'EvaluationPromptTemplateDict',
-    'RoleDescriptionPromptTemplateDict',
-    'TaskPromptTemplateDict',
-    'PromptTemplateGenerator',
-    'PersonaHubPrompt',
-    'SolutionExtractionPromptTemplateDict',
-    'GenerateTextEmbeddingDataPromptTemplateDict',
-    'ObjectRecognitionPromptTemplateDict',
-    'ImageCraftPromptTemplateDict',
-    'MultiConditionImageCraftPromptTemplateDict',
-    'DescriptionVideoPromptTemplateDict',
-    'VideoDescriptionPromptTemplateDict',
+    "TextPrompt",
+    "CodePrompt",
+    "TextPromptDict",
+    "AISocietyPromptTemplateDict",
+    "CodePromptTemplateDict",
+    "MisalignmentPromptTemplateDict",
+    "TranslationPromptTemplateDict",
+    "EvaluationPromptTemplateDict",
+    "RoleDescriptionPromptTemplateDict",
+    "TaskPromptTemplateDict",
+    "PromptTemplateGenerator",
+    "PersonaHubPrompt",
+    "SolutionExtractionPromptTemplateDict",
+    "GenerateTextEmbeddingDataPromptTemplateDict",
+    "ObjectRecognitionPromptTemplateDict",
+    "ImageCraftPromptTemplateDict",
+    "MultiConditionImageCraftPromptTemplateDict",
+    "VideoDescriptionPromptTemplateDict",
 ]
+
+
+def __getattr__(name):
+    if name not in _LAZY_EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    module_name, attr_name = _LAZY_EXPORTS[name]
+    module = importlib.import_module(module_name, __name__)
+    value = getattr(module, attr_name)
+    globals()[name] = value
+    return value

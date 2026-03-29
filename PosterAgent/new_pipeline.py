@@ -550,8 +550,12 @@ def main(argv=None):
     shutil.move(f"{args.tmp_dir}/poster.pptx", pptx_path)
     print(f"Poster PowerPoint saved to {pptx_path}")
 
-    ppt_to_images(pptx_path, output_dir)
-    print(f"Poster images saved to {output_dir}")
+    try:
+        ppt_to_images(pptx_path, output_dir)
+    except RuntimeError as exc:
+        print(f"Warning: poster preview export skipped: {exc}")
+    else:
+        print(f"Poster images saved to {output_dir}")
 
     end_time = time.time()
     time_taken = end_time - start_time

@@ -11,21 +11,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ========= Copyright 2023-2024 @ CAMEL-AI.org. All Rights Reserved. =========
+import importlib
 
 from .base import BaseInterpreter
-from .docker_interpreter import DockerInterpreter
-from .e2b_interpreter import E2BInterpreter
-from .internal_python_interpreter import InternalPythonInterpreter
 from .interpreter_error import InterpreterError
-from .ipython_interpreter import JupyterKernelInterpreter
-from .subprocess_interpreter import SubprocessInterpreter
+
+_LAZY_EXPORTS = {
+    "DockerInterpreter": (".docker_interpreter", "DockerInterpreter"),
+    "E2BInterpreter": (".e2b_interpreter", "E2BInterpreter"),
+    "InternalPythonInterpreter": (
+        ".internal_python_interpreter",
+        "InternalPythonInterpreter",
+    ),
+    "JupyterKernelInterpreter": (
+        ".ipython_interpreter",
+        "JupyterKernelInterpreter",
+    ),
+    "SubprocessInterpreter": (".subprocess_interpreter", "SubprocessInterpreter"),
+}
 
 __all__ = [
-    'BaseInterpreter',
-    'InterpreterError',
-    'InternalPythonInterpreter',
-    'SubprocessInterpreter',
-    'DockerInterpreter',
-    'JupyterKernelInterpreter',
-    'E2BInterpreter',
+    "BaseInterpreter",
+    "InterpreterError",
+    "InternalPythonInterpreter",
+    "SubprocessInterpreter",
+    "DockerInterpreter",
+    "JupyterKernelInterpreter",
+    "E2BInterpreter",
 ]
+
+
+def __getattr__(name):
+    if name not in _LAZY_EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    module_name, attr_name = _LAZY_EXPORTS[name]
+    module = importlib.import_module(module_name, __name__)
+    value = getattr(module, attr_name)
+    globals()[name] = value
+    return value
