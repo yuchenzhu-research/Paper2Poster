@@ -54,6 +54,37 @@ def _build_marker_fallback():
     return create_model_dict, parse_pdf, device, dtype
 
 
+def _limit_sections_for_layout(sections, max_sections):
+    if len(sections) <= max_sections:
+        return sections
+
+    if max_sections <= 2:
+        return sections[:max_sections]
+
+    head = sections[:2]
+    tail = sections[-1:]
+    middle = sections[2:-1]
+    middle_slots = max_sections - len(head) - len(tail)
+
+    if middle_slots <= 0:
+        return sections[:max_sections]
+
+    if len(middle) <= middle_slots:
+        selected_middle = middle
+    else:
+        step = len(middle) / middle_slots
+        selected_middle = []
+        seen = set()
+        for i in range(middle_slots):
+            idx = min(len(middle) - 1, int(round(i * step)))
+            while idx in seen and idx + 1 < len(middle):
+                idx += 1
+            seen.add(idx)
+            selected_middle.append(middle[idx])
+
+    return head + selected_middle + tail
+
+
 @retry(stop=stop_after_attempt(5))
 def parse_raw(args, actor_config, version=1):
     raw_source = args.poster_path
@@ -118,13 +149,10 @@ def parse_raw(args, actor_config, version=1):
         if args.model_name_t.startswith("vllm_qwen"):
             text_content = text_content[:80000]
 
-    if len(content_json["sections"]) > 9:
-        selected_sections = (
-            content_json["sections"][:2]
-            + random.sample(content_json["sections"][2:-2], 5)
-            + content_json["sections"][-2:]
-        )
-        content_json["sections"] = selected_sections
+    max_sections = 6 if getattr(args, "workshop", False) else 9
+    content_json["sections"] = _limit_sections_for_layout(
+        content_json["sections"], max_sections
+    )
 
     has_title = False
 

@@ -24,6 +24,14 @@ IMAGE_SCALE_RATIO_MAX = 40
 TABLE_SCALE_RATIO_MIN = 100
 TABLE_SCALE_RATIO_MAX = 80
 
+
+def _normalize_media_mapping(data):
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, list):
+        return {str(i + 1): item for i, item in enumerate(data)}
+    raise TypeError(f"Unsupported media selection type: {type(data).__name__}")
+
 def compute_tp(raw_content_json):
     total_length = 0
     for section in raw_content_json['sections']:
@@ -299,8 +307,8 @@ def filter_image_table(args, filter_config):
     response = filter_actor_agent.step(filter_prompt.render(**filter_jinja_args))
     input_token, output_token = account_token(response)
     response_json = get_json_from_response(response.msgs[0].content)
-    table_information = response_json['table_information']
-    image_information = response_json['image_information']
+    table_information = _normalize_media_mapping(response_json['table_information'])
+    image_information = _normalize_media_mapping(response_json['image_information'])
     json.dump(image_information, open(f'<{args.model_name_t}_{args.model_name_v}>_images_and_tables/{args.poster_name}_images_filtered.json', 'w'), indent=4)
     json.dump(table_information, open(f'<{args.model_name_t}_{args.model_name_v}>_images_and_tables/{args.poster_name}_tables_filtered.json', 'w'), indent=4)
 
@@ -310,8 +318,12 @@ def gen_outline_layout_v2(args, actor_config):
     total_input_token, total_output_token = 0, 0
     agent_name = 'poster_planner_new_v2'
     doc_json = json.load(open(f'contents/<{args.model_name_t}_{args.model_name_v}>_{args.poster_name}_raw_content.json', 'r'))
-    filtered_table_information = json.load(open(f'<{args.model_name_t}_{args.model_name_v}>_images_and_tables/{args.poster_name}_tables_filtered.json', 'r'))
-    filtered_image_information = json.load(open(f'<{args.model_name_t}_{args.model_name_v}>_images_and_tables/{args.poster_name}_images_filtered.json', 'r'))
+    filtered_table_information = _normalize_media_mapping(
+        json.load(open(f'<{args.model_name_t}_{args.model_name_v}>_images_and_tables/{args.poster_name}_tables_filtered.json', 'r'))
+    )
+    filtered_image_information = _normalize_media_mapping(
+        json.load(open(f'<{args.model_name_t}_{args.model_name_v}>_images_and_tables/{args.poster_name}_images_filtered.json', 'r'))
+    )
 
     filtered_table_information_captions = {}
     filtered_image_information_captions = {}

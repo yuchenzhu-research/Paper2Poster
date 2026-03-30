@@ -16,7 +16,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model_name_v", type=str, default="4o")
     parser.add_argument("--index", type=int, default=0)
     parser.add_argument("--poster_name", type=str, default=None)
+    parser.add_argument(
+        "--workshop",
+        action="store_true",
+        help="Use workshop poster defaults (24x36 portrait) and denser-content safeguards.",
+    )
     parser.add_argument("--tmp_dir", type=str, default="tmp")
+    parser.add_argument("--output_pptx_path", type=str, default=None)
     parser.add_argument("--estimate_chars", action="store_true")
     parser.add_argument("--max_workers", type=int, default=10)
     parser.add_argument("--poster_width_inches", type=int, default=None)
@@ -52,6 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help="Custom path to institution logo (auto-searches from paper metadata if not provided)",
+    )
+    parser.add_argument(
+        "--disable_institution_logo",
+        action="store_true",
+        help="Disable institution logo auto-detection and insertion.",
     )
     parser.add_argument(
         "--conference_logo_path",
@@ -127,15 +138,23 @@ def main(argv=None):
     if args.poster_width_inches is not None and args.poster_height_inches is not None:
         poster_width = args.poster_width_inches * units_per_inch
         poster_height = args.poster_height_inches * units_per_inch
+        preserve_requested_dimensions = True
+    elif args.workshop:
+        poster_width = 24 * units_per_inch
+        poster_height = 36 * units_per_inch
+        preserve_requested_dimensions = True
     elif os.path.exists(meta_json_path):
         meta_json = json.load(open(meta_json_path, "r"))
         poster_width = meta_json["width"]
         poster_height = meta_json["height"]
+        preserve_requested_dimensions = False
     else:
         poster_width = 48 * units_per_inch
         poster_height = 36 * units_per_inch
+        preserve_requested_dimensions = False
 
-    poster_width, poster_height = scale_to_target_area(poster_width, poster_height)
+    if not preserve_requested_dimensions:
+        poster_width, poster_height = scale_to_target_area(poster_width, poster_height)
     poster_width_inches = to_inches(poster_width, units_per_inch)
     poster_height_inches = to_inches(poster_height, units_per_inch)
 
@@ -174,10 +193,10 @@ def main(argv=None):
     detail_log["parser_out_t"] = output_token
 
     logo_manager = LogoManager()
-    institution_logo_path = args.institution_logo_path
+    institution_logo_path = None if args.disable_institution_logo else args.institution_logo_path
     conference_logo_path = args.conference_logo_path
 
-    if not institution_logo_path:
+    if not institution_logo_path and not args.disable_institution_logo:
         print("\n" + "=" * 60)
         print("🔍 AUTO-DETECTING INSTITUTION FROM PAPER")
         print("=" * 60)
@@ -414,6 +433,21 @@ def main(argv=None):
         main_text_fill_color,
     )
 
+    if args.workshop:
+        def _scale_font_size(value, factor, minimum):
+            if value is None:
+                return None
+            return max(minimum, int(round(value * factor)))
+
+        bullet_fs = _scale_font_size(bullet_fs, 0.65, 28)
+        title_fs = _scale_font_size(title_fs, 0.65, 34)
+        poster_title_fs = _scale_font_size(poster_title_fs, 0.60, 42)
+        poster_author_fs = _scale_font_size(poster_author_fs, 0.65, 24)
+        print(
+            "Workshop mode: reducing title/body font sizes for 24x36 portrait layout.",
+            flush=True,
+        )
+
     setattr(args, "bullet_font_size", bullet_fs)
     setattr(args, "section_title_font_size", title_fs)
     setattr(args, "poster_title_font_size", poster_title_fs)
@@ -423,6 +457,10 @@ def main(argv=None):
     setattr(args, "main_text_color", main_text_color)
     setattr(args, "main_text_fill_color", main_text_fill_color)
     setattr(args, "section_title_vertical_align", section_title_vertical_align)
+
+    if args.workshop and not args.estimate_chars:
+        args.estimate_chars = True
+        print("Workshop mode: enabling text-length estimation safeguards.", flush=True)
 
     print(
         f"\n✍️ Generating poster content (max_workers={args.max_workers})...",
@@ -546,7 +584,8 @@ def main(argv=None):
                 ),
             )
 
-    pptx_path = os.path.join(output_dir, f"{poster_name}.pptx")
+    pptx_path = args.output_pptx_path or os.path.join(output_dir, f"{poster_name}.pptx")
+    os.makedirs(os.path.dirname(pptx_path), exist_ok=True)
     shutil.move(f"{args.tmp_dir}/poster.pptx", pptx_path)
     print(f"Poster PowerPoint saved to {pptx_path}")
 

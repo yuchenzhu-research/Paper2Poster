@@ -186,6 +186,67 @@ def generate_poster_code(
     code = ''
     code += initialize_poster_code(slide_width, slide_height, slide_object_name, presentation_object_name, utils_functions)
 
+    def _clone_paragraph_spec_with_text(paragraphs_spec, text):
+        if isinstance(paragraphs_spec, list) and paragraphs_spec:
+            paragraph = json.loads(json.dumps(paragraphs_spec[0]))
+        else:
+            paragraph = {
+                "alignment": "center",
+                "bullet": False,
+                "level": 0,
+                "font_size": 40,
+                "runs": [{"text": ""}],
+            }
+
+        runs = paragraph.get("runs", [])
+        if not runs:
+            runs = [{"text": ""}]
+
+        first_run = json.loads(json.dumps(runs[0]))
+        first_run["text"] = text
+        paragraph["runs"] = [first_run]
+        return [paragraph]
+
+    def _extract_plain_text(paragraphs_spec):
+        if isinstance(paragraphs_spec, str):
+            return paragraphs_spec
+        if not isinstance(paragraphs_spec, list):
+            return "" if paragraphs_spec is None else str(paragraphs_spec)
+
+        texts = []
+        for paragraph in paragraphs_spec:
+            for run in paragraph.get("runs", []):
+                run_text = run.get("text", "")
+                if run_text:
+                    texts.append(run_text)
+        return " ".join(texts).strip()
+
+    def _split_rich_text_for_boxes(paragraphs_spec, count):
+        if count <= 1:
+            return [paragraphs_spec]
+
+        plain_text = _extract_plain_text(paragraphs_spec)
+        if not plain_text:
+            return [_clone_paragraph_spec_with_text(paragraphs_spec, "") for _ in range(count)]
+
+        words = plain_text.split()
+        if len(words) <= count:
+            parts = words + [""] * (count - len(words))
+        else:
+            parts = []
+            start = 0
+            for i in range(count):
+                remaining_words = len(words) - start
+                remaining_parts = count - i
+                take = max(1, round(remaining_words / remaining_parts))
+                end = min(len(words), start + take)
+                parts.append(" ".join(words[start:end]))
+                start = end
+            if start < len(words):
+                parts[-1] = (parts[-1] + " " + " ".join(words[start:])).strip()
+
+        return [_clone_paragraph_spec_with_text(paragraphs_spec, part) for part in parts]
+
     if theme is None:
         panel_visible = visible
         textbox_visible = visible
@@ -208,30 +269,38 @@ def generate_poster_code(
         # Pass full theme for consistency
         code += generate_textbox_code(t, '', slide_object_name, textbox_visible, content, theme, tmp_dir, is_title=False)
     else:
-        all_content = []
-        title_indices = set()  # Track which indices are section titles
+        aligned_content = []
+        aligned_title_flags = []
         if content is not None:
-            idx = 0
-            for section_content in content:
-                if 'title' in section_content:
-                    all_content.append(section_content['title'])
-                    title_indices.add(idx)  # Mark this index as a title
-                    idx += 1
-                if len(section_content) == 2:
-                    all_content.append(section_content['textbox1'])
-                    idx += 1
-                elif len(section_content) == 3:
-                    all_content.append(section_content['textbox1'])
-                    all_content.append(section_content['textbox2'])
-                    idx += 2
-                else:
-                    raise ValueError(f"Unexpected content length: {len(section_content)}")
+            boxes_by_panel = {}
+            for textbox in text_arrangement_list:
+                boxes_by_panel.setdefault(textbox["panel_id"], []).append(textbox)
+
+            for panel_id, section_content in enumerate(content):
+                panel_boxes = boxes_by_panel.get(panel_id, [])
+                title_boxes = [box for box in panel_boxes if box["textbox_id"] == 0]
+                title_parts = _split_rich_text_for_boxes(
+                    section_content.get("title", []), len(title_boxes)
+                )
+                title_part_idx = 0
+
+                for textbox in panel_boxes:
+                    textbox_id = textbox["textbox_id"]
+                    if textbox_id == 0:
+                        textbox_content = title_parts[title_part_idx]
+                        title_part_idx += 1
+                        is_title = True
+                    else:
+                        textbox_content = section_content.get(f"textbox{textbox_id}", "")
+                        is_title = False
+                    aligned_content.append(textbox_content)
+                    aligned_title_flags.append(is_title)
 
         for i in range(len(text_arrangement_list)):
             t = text_arrangement_list[i]
             if content is not None:
-                textbox_content = all_content[i]
-                is_title = i in title_indices
+                textbox_content = aligned_content[i]
+                is_title = aligned_title_flags[i]
             else:
                 textbox_content = None
                 is_title = False
